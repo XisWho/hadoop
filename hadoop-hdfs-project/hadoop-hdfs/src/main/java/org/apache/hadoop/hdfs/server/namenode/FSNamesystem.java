@@ -727,9 +727,16 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
 
     checkConfiguration(conf);
+
+    // 构建FSImage
     FSImage fsImage = new FSImage(conf,
+        // fsImage
         FSNamesystem.getNamespaceDirs(conf),
+        // edits log
+        // 默认情况下，fsImage和edits log是放在同一个目录下的
         FSNamesystem.getNamespaceEditsDirs(conf));
+
+    // 创建FSNamesystem对象，FSNamesystem对象会持有FSImage对象
     FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
@@ -738,6 +745,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
     long loadStart = now();
     try {
+      // 通过FSImage构建内存中的namesystem数据
       namesystem.loadFSImage(startOpt);
     } catch (IOException ioe) {
       LOG.warn("Encountered exception loading fsimage", ioe);
@@ -1004,6 +1012,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     return Collections.unmodifiableList(auditLoggers);
   }
 
+  /**
+   * 在namenode启动的时候，会从磁盘上读取fsimage和editslog两个文件
+   * 然后在内存中合并为一份完整的元数据
+   * 接着将内存中的元数据回写一份到磁盘上，替换原来旧的fsimage文件
+   * 替换完成之后，就会重新打开一个新的、空的editslog文件来写入
+   * @param startOpt
+   * @throws IOException
+   */
   private void loadFSImage(StartupOption startOpt) throws IOException {
     final FSImage fsImage = getFSImage();
 
@@ -1015,6 +1031,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       startOpt = StartupOption.REGULAR;
     }
     boolean success = false;
+
+    // 加写锁
     writeLock();
     try {
       // We shouldn't be calling saveNamespace if we've come up in standby state.
@@ -1102,13 +1120,20 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     writeLock();
     this.haContext = haContext;
     try {
+      // 检查namenode所在linux上的磁盘空间是否还足够的
       nnResourceChecker = new NameNodeResourceChecker(conf);
+      // 检查可用的资源是否充足
+      // namenode正常运行首要的一个条件，就是说edits log必须要有这个足够的空间写入
+      // 但看了源码之后，好像只是设置了空间不够的标识变量以及输出warn日志
       checkAvailableResources();
+
+      // 目前namenode启动，已经进入了safemode阶段
+      // 处于一个等待汇报blocks的step
       assert safeMode != null && !isPopulatingReplQueues();
       StartupProgress prog = NameNode.getStartupProgress();
       prog.beginPhase(Phase.SAFEMODE);
       prog.setTotal(Phase.SAFEMODE, STEP_AWAITING_REPORTED_BLOCKS,
-        getCompleteBlocksTotal());
+        getCompleteBlocksTotal());  // CompleteBlocks，就是说当前处于complete状态的block
       setBlockTotal();
       blockManager.activate(conf);
     } finally {
@@ -6284,8 +6309,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // Calculate number of blocks under construction
     long numUCBlocks = 0;
     readLock();
+    // 获取处于under construction状态的block的数量
+    // 可能是还没收到汇报的信息，或者是block的对象正在构造中
     numUCBlocks = leaseManager.getNumUnderConstructionBlocks();
     try {
+      // 获取总的block数量
       return getBlocksTotal() - numUCBlocks;
     } finally {
       readUnlock();

@@ -118,11 +118,13 @@ public class NameNodeHttpServer {
       }
     }
 
+    // hadoop自己实现的一套http服务
     HttpServer2.Builder builder = DFSUtil.httpServerTemplateForNNAndJN(conf,
         httpAddr, httpsAddr, "hdfs",
         DFSConfigKeys.DFS_NAMENODE_KERBEROS_INTERNAL_SPNEGO_PRINCIPAL_KEY,
         DFSConfigKeys.DFS_NAMENODE_KEYTAB_FILE_KEY);
 
+    // 构建httpServer
     httpServer = builder.build();
 
     if (policy.isHttpsEnabled()) {
@@ -138,7 +140,11 @@ public class NameNodeHttpServer {
 
     httpServer.setAttribute(NAMENODE_ATTRIBUTE_KEY, nn);
     httpServer.setAttribute(JspHelper.CURRENT_CONF, conf);
+    // 绑定Servlet
+    // 定义了httpServer可以接收哪些请求（即接口），并且由谁来处理
     setupServlets(httpServer, conf);
+
+    // 启动httpServer
     httpServer.start();
 
     int connIdx = 0;

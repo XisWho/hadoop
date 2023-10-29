@@ -536,6 +536,7 @@ public class NameNode implements NameNodeStatusMXBean {
   }
 
   protected void loadNamesystem(Configuration conf) throws IOException {
+    // namenode启动的时候，会将磁盘上的fsimage和editslog两个文件都读取到内存里来进行合并，形成元数据
     this.namesystem = FSNamesystem.loadFromDisk(conf);
   }
 
@@ -589,14 +590,18 @@ public class NameNode implements NameNodeStatusMXBean {
     NameNode.initMetrics(conf, this.getRole());
     StartupProgressMetrics.register(startupProgress);
 
+    // NameNode，启动Http服务器
     if (NamenodeRole.NAMENODE == role) {
       startHttpServer(conf);
     }
 
     this.spanReceiverHost = SpanReceiverHost.getInstance(conf);
 
+    // 初始化FsNamesystem
     loadNamesystem(conf);
 
+    // namenode，是分成两个server，一个是http server，监听的是50070，主要是对接你通过浏览器来请求他查看hdfs集群的一些信息的；
+    // 一个是rpc server，hdfs集群内部，namenode和datanode之间进行通信，或者是dfsclient跟namenode之间进行通信
     rpcServer = createRpcServer(conf);
     if (clientNamenodeAddress == null) {
       // This is expected for MiniDFSCluster. Set it now using 
@@ -702,7 +707,9 @@ public class NameNode implements NameNodeStatusMXBean {
   }
   
   private void startHttpServer(final Configuration conf) throws IOException {
+    // 核心组件
     httpServer = new NameNodeHttpServer(conf, this, getHttpServerBindAddress(conf));
+    // 启动
     httpServer.start();
     httpServer.setStartupProgress(startupProgress);
   }
@@ -762,6 +769,7 @@ public class NameNode implements NameNodeStatusMXBean {
     this.haContext = createHAContext();
     try {
       initializeGenericKeys(conf, nsId, namenodeId);
+      // 初始化NameNode实例对象
       initialize(conf);
       try {
         haContext.writeLock();
@@ -1375,6 +1383,7 @@ public class NameNode implements NameNodeStatusMXBean {
     GenericOptionsParser hParser = new GenericOptionsParser(conf, argv);
     argv = hParser.getRemainingArgs();
     // Parse the rest, NN specific args.
+    // startOpt就是命令行参数
     StartupOption startOpt = parseArguments(argv);
     if (startOpt == null) {
       printUsage(System.err);
@@ -1382,6 +1391,7 @@ public class NameNode implements NameNodeStatusMXBean {
     }
     setStartupOption(conf, startOpt);
 
+    // 根据不同的命令行参数进行操作
     switch (startOpt) {
       case FORMAT: {
         boolean aborted = format(conf, startOpt.getForceFormat(),
@@ -1441,6 +1451,8 @@ public class NameNode implements NameNodeStatusMXBean {
         terminate(0);
         return null;
       }
+      // 不带命令行参数，默认走这里
+      // new出了一个NameNode对象
       default: {
         DefaultMetricsSystem.initialize("NameNode");
         return new NameNode(conf);
@@ -1503,12 +1515,15 @@ public class NameNode implements NameNodeStatusMXBean {
   /**
    */
   public static void main(String argv[]) throws Exception {
+    // 看源码一定要抓住主要流程，否则会被细节淹没
     if (DFSUtil.parseHelpArgument(argv, NameNode.USAGE, System.out, true)) {
       System.exit(0);
     }
 
     try {
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
+
+      // 创建NameNode
       NameNode namenode = createNameNode(argv, null);
       if (namenode != null) {
         namenode.join();

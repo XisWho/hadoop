@@ -112,10 +112,12 @@ public class LeaseManager {
       + "acquired before counting under construction blocks";
     long numUCBlocks = 0;
     for (Lease lease : sortedLeases) {
+      // 这里是有lease、path、INodeFile的概念，后续再说
       for (String path : lease.getPaths()) {
         final INodeFile cons;
         try {
           cons = this.fsnamesystem.getFSDirectory().getINode(path).asFile();
+          // 判断INodeFile是否处于Under Construction的状态
           if (!cons.isUnderConstruction()) {
             LOG.warn("The file " + cons.getFullPathName()
                 + " is not under construction but has lease.");
@@ -124,10 +126,14 @@ public class LeaseManager {
         } catch (UnresolvedLinkException e) {
           throw new AssertionError("Lease files should reside on this FS");
         }
+        // 一个文件会拆分成128M的多个Block
+        // 这里是获取一个文件的所有Block
         BlockInfo[] blocks = cons.getBlocks();
         if(blocks == null)
           continue;
+        // 遍历这个文件的block
         for(BlockInfo b : blocks) {
+          // 如果block不是complete，那么这个block就属于under construction
           if(!b.isComplete())
             numUCBlocks++;
         }

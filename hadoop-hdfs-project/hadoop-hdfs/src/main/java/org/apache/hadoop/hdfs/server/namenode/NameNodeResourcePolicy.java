@@ -56,6 +56,7 @@ final class NameNodeResourcePolicy {
     for (CheckableNameNodeResource resource : resources) {
       if (!resource.isRequired()) {
         redundantResourceCount++;
+        // 调用JDK底层API，获取磁盘当前目录剩余空间
         if (!resource.isResourceAvailable()) {
           disabledRedundantResourceCount++;
         }
